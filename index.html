@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mundo IA</title>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#12131a;--panel:#1b1d27;--line:#2a2d3b;--txt:#e6e6ef;--mut:#9aa0b4;--acc:#e8b04a;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:'Pixelify Sans',monospace;font-size:15px}
+  .app{display:flex;gap:12px;padding:12px;min-height:100vh;align-items:flex-start}
+  .stage{flex:1;min-width:0}
+  canvas{display:block;width:100%;height:auto;image-rendering:pixelated;border:2px solid var(--line);border-radius:8px;background:#000;cursor:pointer}
+  .aviso{color:var(--mut);font-size:13px;margin-top:6px}
+  .panel{width:350px;flex-shrink:0;display:flex;flex-direction:column;gap:10px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px}
+  h1{font-size:22px;margin:0}
+  h2{font-size:15px;margin:0 0 6px;color:var(--acc);font-weight:600}
+  .sub{color:var(--mut);font-size:13px}
+  .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  button{font-family:inherit;font-size:14px;background:#2a2d3b;color:var(--txt);border:1px solid #3a3e52;border-radius:6px;padding:5px 10px;cursor:pointer}
+  button:hover{background:#353950}
+  button.on{background:var(--acc);color:#1b1d27;border-color:var(--acc)}
+  input[type=text]{font-family:inherit;font-size:14px;flex:1;min-width:0;background:#11121a;color:var(--txt);border:1px solid #3a3e52;border-radius:6px;padding:6px}
+  .stats{display:flex;gap:14px;margin-top:6px;font-size:14px}
+  .stats b{color:var(--acc)}
+  .ag{display:grid;grid-template-columns:14px 1fr auto;gap:2px 8px;align-items:center;padding:5px;border-radius:6px;cursor:pointer}
+  .ag:hover,.ag.sel{background:#262938}
+  .dot{width:12px;height:12px;border-radius:3px}
+  .ag .est{color:var(--mut);font-size:12px;grid-column:2/4}
+  .bar{grid-column:2/4;height:4px;background:#11121a;border-radius:2px;overflow:hidden}
+  .bar i{display:block;height:100%;background:#4fd18b}
+  .cerebro{font-size:14px;line-height:1.4}
+  .cerebro .k{color:var(--mut)}
+  summary{cursor:pointer;color:#c9a7ff}
+  .pre{white-space:pre-wrap;background:#11121a;border:1px solid var(--line);border-radius:6px;padding:6px;margin:4px 0;font-family:Consolas,monospace;font-size:12px;max-height:180px;overflow:auto}
+  .log{max-height:220px;overflow:auto;font-size:13px;line-height:1.45}
+  .log div{border-bottom:1px solid #23263300;padding:1px 0}
+  .log .h{color:var(--mut)}
+  @media (max-width:900px){.app{flex-direction:column}.panel{width:100%}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage">
+    <canvas id="mundo"></canvas>
+    <div class="aviso">Clique num robô para ver o "cérebro" dele. Missão 3: os robôs agora têm <b>memória</b> (raw → wiki → output). Feche a página e abra de novo: eles lembram. Os vereditos ainda são sorteados (simulação).</div>
+  </div>
+
+  <div class="panel">
+    <div class="card">
+      <h1>🌍 Mundo IA</h1>
+      <div class="sub">Missão 3 — A memória (raw → wiki → output)</div>
+      <div class="stats"><span>📅 Dia <b id="dia">1</b></span><span>🕗 <b id="relogio">08:00</b></span><span>🏆 <b id="concluidas">0</b></span><span>🚫 <b id="recusados">0</b></span><span>📄 Em andamento: <b id="ativas">0</b></span></div>
+    </div>
+
+    <div class="card">
+      <h2>Controles</h2>
+      <div class="row">
+        <button id="pausa">⏸ Pausar</button>
+        <button class="vel on" data-v="1">1x</button>
+        <button class="vel" data-v="2">2x</button>
+        <button class="vel" data-v="4">4x</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label><input type="checkbox" id="auto" checked> Pedidos automáticos</label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📨 Mandar um pedido</h2>
+      <div class="row">
+        <input type="text" id="pedido" placeholder="Ex.: Avaliar depto em Ñuñoa">
+        <button id="enviar">Enviar</button>
+      </div>
+      <div class="sub" style="margin-top:4px">O pedido cai na caixa do Coordenador e passa de sala em sala.</div>
+    </div>
+
+    <div class="card">
+      <h2>🤖 Habitantes</h2>
+      <div id="lista"></div>
+    </div>
+
+    <div class="card">
+      <h2 id="cerebroTitulo">🧠 Cérebro</h2>
+      <div class="cerebro" id="cerebro">Clique num robô.</div>
+      <div class="cerebro" id="consulta" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h2>🗂️ Memória <span class="sub">(raw → wiki → output)</span></h2>
+      <div class="stats" style="margin-top:0"><span>raw <b id="mRaw">0</b></span><span>wiki <b id="mWiki">0</b></span><span>output <b id="mOut">0</b></span></div>
+      <details open><summary>📖 Páginas da wiki</summary><div id="mPaginas" class="log" style="max-height:150px"></div></details>
+      <details open><summary>🔎 Registro de acessos (quem leu / escreveu)</summary><div id="mAcessos" class="log" style="max-height:170px"></div></details>
+      <div class="row" style="margin-top:6px"><button id="mBaixar">💾 Baixar memória (.md)</button><button id="mApagar">🧹 Apagar memória</button></div>
+      <div class="sub" style="margin-top:4px">Por enquanto fica guardada só neste navegador. Na missão da nuvem, vai para o GitHub.</div>
+    </div>
+
+    <div class="card">
+      <h2>📜 Diário do mundo</h2>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   MUNDO IA — Missão 1
+   Um mapa em grade (tiles) + 5 agentes. Cada agente repete o ciclo:
+     1. PERCEBER  -> olha a própria caixa de entrada, a energia, o que carrega
+     2. DECIDIR   -> função pensar(): regras fixas (if/else)  <- na Missão 2 vira IA
+     3. AGIR      -> fila de ações: ir, trabalhar, esperar, falar...
+   ===================================================================== */
+
+const T = 16;            // tamanho de um tile (quadradinho) em pixels do mundo
+const COLS = 40, ROWS = 25;
+const ESCALA = 2;        // desenha em 2x para o texto ficar nítido
+const VEL = 56;         // velocidade de caminhada (pixels por segundo)
+const FONTE = "'Pixelify Sans', monospace";
+
+const cv = document.getElementById('mundo');
+cv.width = COLS * T * ESCALA; cv.height = ROWS * T * ESCALA;
+const ctx = cv.getContext('2d');
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+function R(g, x, y, w, h, c){ g.fillStyle = c; g.fillRect(x, y, w, h); }
+function sombra(hex, f = 0.72){ const n = parseInt(hex.slice(1), 16);
+  return `rgb(${(n>>16&255)*f|0},${(n>>8&255)*f|0},${(n&255)*f|0})`; }
+
+/* ---------------------------- O MAPA ---------------------------- */
+// Cada sala: posição (x,y), tamanho (w,h) contando as paredes, cores do piso e objetos.
+// rx/ry = posição do objeto DENTRO da sala. spot = onde o agente fica de pé para usar o objeto.
+const SALAS = [
+  { id:'esc', nome:'📋 Escritório', x:0,  y:0,  w:14, h:11, piso:['#8a6a4f','#80624a'], objs:[
+    {k:'board', rx:2, ry:1, w:4},
+    {k:'desk', n:'mesa', rx:8, ry:3, w:3, spot:[9,4]},
+    {k:'rug', rx:8, ry:6, w:4, h:3, livre:true},
+    {k:'plant', rx:12, ry:1}, {k:'plant', rx:1, ry:9},
+    {k:'inbox', n:'caixa', rx:4, ry:8, spot:[5,8]} ]},
+  { id:'bib', nome:'📚 Biblioteca', x:13, y:0,  w:14, h:11, piso:['#55648a','#4e5c80'], objs:[
+    {k:'shelf', rx:1, ry:1, w:4},
+    {k:'shelf', n:'estante', rx:6, ry:1, w:4, spot:[7,2]},
+    {k:'shelf', rx:11, ry:1, w:2},
+    {k:'table', rx:2, ry:5, w:4, h:2},
+    {k:'plant', rx:12, ry:9},
+    {k:'inbox', n:'caixa', rx:10, ry:8, spot:[9,8]} ]},
+  { id:'imo', nome:'🏢 Sala Imobiliária', x:26, y:0, w:14, h:11, piso:['#4b7566','#456b5d'], objs:[
+    {k:'screen', rx:2, ry:1, w:3},
+    {k:'chart', rx:8, ry:1, w:4},
+    {k:'desk', n:'mesa', rx:2, ry:4, w:3, spot:[3,5]},
+    {k:'maptable', rx:8, ry:5, w:3, h:2},
+    {k:'plant', rx:1, ry:9}, {k:'plant', rx:12, ry:9},
+    {k:'inbox', n:'caixa', rx:11, ry:8, spot:[10,8]} ]},
+  { id:'est', nome:'🎬 Estúdio', x:0, y:13, w:14, h:12, piso:['#74506a','#6a4961'], objs:[
+    {k:'studiodesk', n:'mesa', rx:2, ry:6, w:3, spot:[3,7]},
+    {k:'camera', rx:3, ry:9},
+    {k:'light', rx:1, ry:6},
+    {k:'sofa', rx:8, ry:9, w:4},
+    {k:'plant', rx:1, ry:1}, {k:'plant', rx:12, ry:1},
+    {k:'inbox', n:'caixa', rx:4, ry:2, spot:[5,2]} ]},
+  { id:'cafe', nome:'☕ Café', x:13, y:13, w:14, h:12, piso:['#b59a6e','#a98f64'], objs:[
+    {k:'coffee', n:'cafeteira', rx:10, ry:1, w:2, spot:[10,2]},
+    {k:'ctable', rx:3, ry:4}, {k:'ctable', rx:3, ry:7}, {k:'ctable', rx:9, ry:6},
+    {k:'sofa', rx:4, ry:10, w:4},
+    {k:'plant', rx:1, ry:1}, {k:'plant', rx:12, ry:10} ],
+    assentos:[[2,4],[4,4],[2,7],[4,7],[8,6],[10,6],[5,9],[6,9]] },
+  { id:'cor', nome:'📦 Correio', x:26, y:13, w:14, h:12, piso:['#666b77','#5e636e'], objs:[
+    {k:'mailbox', n:'correio', rx:3, ry:3, spot:[3,4]},
+    {k:'table', rx:8, ry:3, w:4},
+    {k:'box', rx:11, ry:10}, {k:'box', rx:12, ry:10}, {k:'box', rx:12, ry:9},
+    {k:'plant', rx:1, ry:10},
+    {k:'inbox', n:'caixa', rx:5, ry:2, spot:[5,3]} ]},
+];
+const salaDe = id => SALAS.find(s => s.id === id);
+const obj = (salaId, nome) => salaDe(salaId).objs.find(o => o.n === nome);
+
+// grade: cada célula sabe o tipo (parede/piso/porta/corredor), a sala e se bloqueia a passagem
+const grade = [];
+for (let y = 0; y < ROWS; y++){ grade.push([]); for (let x = 0; x < COLS; x++) grade[y].push({t:'corr', sala:null, bloq:false}); }
+
+for (const s of SALAS){
+  s.caixa = [];  // caixa de entrada da sala (fila de tarefas)
+  s.portaY = s.y === 0 ? s.y + s.h - 1 : s.y;
+  for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++){
+    const borda = x === s.x || x === s.x + s.w - 1 || y === s.y || y === s.y + s.h - 1;
+    grade[y][x] = borda ? {t:'wall', sala:null, bloq:true} : {t:'floor', sala:s.id, bloq:false};
+  }
+  for (const dx of [6, 7]) grade[s.portaY][s.x + dx] = {t:'door', sala:s.id, bloq:false};
+  for (const o of s.objs){
+    o.w = o.w || 1; o.h = o.h || 1; o.x = s.x + o.rx; o.y = s.y + o.ry;
+    if (o.spot){ o.sx = s.x + o.spot[0]; o.sy = s.y + o.spot[1]; }
+    if (!o.livre) for (let y = o.y; y < o.y + o.h; y++) for (let x = o.x; x < o.x + o.w; x++) grade[y][x].bloq = true;
+  }
+}
+for (const y of [11, 12]){ grade[y][0] = {t:'wall', bloq:true}; grade[y][COLS-1] = {t:'wall', bloq:true}; }
+
+// Busca em largura (BFS): acha o caminho mais curto entre dois tiles, desviando de paredes e móveis
+function caminho(sx, sy, gx, gy){
+  if (sx === gx && sy === gy) return [];
+  const k = (x, y) => y * COLS + x, ini = k(sx, sy), fim = k(gx, gy);
+  const ant = new Int32Array(COLS * ROWS).fill(-1); ant[ini] = ini;
+  const fila = [ini];
+  for (let h = 0; h < fila.length; h++){
+    const c = fila[h]; if (c === fim) break;
+    const x = c % COLS, y = (c / COLS) | 0;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS) continue;
+      const nk = k(nx, ny);
+      if (ant[nk] !== -1 || grade[ny][nx].bloq) continue;
+      ant[nk] = c; fila.push(nk);
+    }
+  }
+  if (ant[fim] === -1) return null;
+  const out = []; for (let c = fim; c !== ini; c = ant[c]) out.push({x: c % COLS, y: (c / COLS) | 0});
+  return out.reverse();
+}
+
+function tileAleatorio(salaId){
+  const op = [];
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++){ const g = grade[y][x]; if (g.t === 'floor' && g.sala === salaId && !g.bloq) op.push([x, y]); }
+  return pick(op);
+}
+const assentoCafe = () => { const s = salaDe('cafe'), a = pick(s.assentos); return [s.x + a[0], s.y + a[1]]; };
+
+/* ------------------------- AS ETAPAS DE TRABALHO ------------------------- */
+// Uma tarefa passa por 6 etapas. Cada etapa tem um dono (sala), um objeto de trabalho e a próxima etapa.
+const ETAPAS = {
+  // Missão 2: a próxima etapa do pedido não é mais fixa: quem decide é o cérebro (t.decisao)
+  pedido:    {sala:'esc', obj:'mesa',    dur:2, rotulo:'Planejando',      prox:t => t.decisao.destino,
+              ini:'Pedido novo! Deixa eu ler...',
+              fim:t => ({pesquisa:'Precisa de dados → Biblioteca 📚', roteiro:'É conteúdo → Estúdio 🎬', recusar:'Isso não é trabalho nosso ❌'})[t.decisao.destino],
+              res:t => `decidiu "${t.decisao.destino}"`},
+  pesquisa:  {sala:'bib', obj:'estante', dur:5, rotulo:'Pesquisando',     prox:'analise',
+              ini:'Deixa eu pesquisar...', fim:() => 'Achei os dados! 📚',
+              res:t => t.lembrou ? `reaproveitou a wiki de ${t.lembrou.nome} + 1 fonte nova` : pick(['3 fontes públicas consultadas','5 anúncios comparáveis achados','dados do bairro reunidos'])},
+  analise:   {sala:'imo', obj:'mesa',    dur:5, rotulo:'Analisando',      prox:'roteiro',
+              ini:'Hora de fazer as contas...', fim:t => `Veredito: ${t.veredito}`,
+              res:t => { t.veredito = pick(['DEAL ✅','NO DEAL ❌','TALVEZ 🤔']); return `veredito ${t.veredito}`; }},
+  roteiro:   {sala:'est', obj:'mesa',    dur:4, rotulo:'Escrevendo',      prox:'envio',
+              ini:'Vou escrever o resumo.', fim:() => 'Texto pronto ✍️', res:() => 'resumo de 3 linhas escrito'},
+  envio:     {sala:'cor', obj:'correio', dur:2, rotulo:'Embalando',       prox:'relatorio',
+              ini:'Mais uma entrega!', fim:() => 'Saindo pra entrega! 📦', res:() => 'relatório embalado'},
+  relatorio: {sala:'esc', obj:'mesa',    dur:2, rotulo:'Lendo relatório', prox:null,
+              ini:'Chegou o relatório!', fim:() => 'Missão cumprida! 🏆', res:t => `missão encerrada (${t.veredito})`},
+};
+
+const PEDIDOS_AUTO = ['Avaliar depto 2D2B em Ñuñoa','Comparar aluguel: Providencia x Las Condes','Resumo semanal do mercado de Santiago',
+  'Ideia de reel: o agente que diz NO DEAL','Checar notícias de juros no Chile','Avaliar studio perto do metrô Tobalaba','Pedir pizza para o escritório 🍕'];
+/* ------------------- MISSÃO 2: O CÉREBRO DO COORDENADOR ------------------- */
+// UMA variável decide qual cérebro está ligado. Hoje: 'teste' (grátis, palavras-chave).
+// Quando o Vaz colocar crédito na API: modo 'claude' + o modelo escolhido.
+const CEREBRO = { modo:'teste', modelo:'claude-opus-5-5' };
+
+// As instruções (o "prompt") que a IA de verdade vai receber. O cérebro de teste imita as mesmas regras.
+const INSTRUCOES = `Você é o Coordenador do Mundo IA, uma equipe de agentes que trabalha com mercado imobiliário no Chile e com conteúdo para redes sociais.
+Leia o pedido e escolha UM destino:
+- "pesquisa": o pedido precisa de dados (imóveis, preços, aluguel, bairros, mercado, juros). Vai para a Biblioteca.
+- "roteiro": o pedido é de conteúdo (reel, vídeo, post, newsletter, texto) e não precisa de dados novos. Vai direto ao Estúdio.
+- "recusar": o pedido não tem nada a ver com o trabalho desta equipe.
+Responda só em JSON: {"destino": "pesquisa" | "roteiro" | "recusar", "motivo": "uma frase curta"}`;
+
+// Cérebro de teste: procura palavras-chave. Rápido e grátis, mas "burro": não entende frases.
+const PALAVRAS = {
+  roteiro:  ['reel','video','roteiro','post','newsletter','ideia','texto','instagram','youtube','legenda'],
+  pesquisa: ['depto','departamento','apartamento','casa','imovel','aluguel','arriendo','avaliar','comparar','bairro','comuna',
+             'metro','studio','mercado','preco','juros','nunoa','providencia','las condes','santiago','m2'],
+};
+const normalizar = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+function cerebroTeste(pedido){
+  const txt = normalizar(pedido), achou = d => PALAVRAS[d].find(p => txt.includes(p));
+  const r = achou('roteiro'), p = achou('pesquisa');
+  if (r) return {destino:'roteiro',  motivo:`É pedido de conteúdo (achei a palavra "${r}") → direto ao Estúdio.`};
+  if (p) return {destino:'pesquisa', motivo:`Precisa de dados (achei a palavra "${p}") → começa na Biblioteca.`};
+  return {destino:'recusar', motivo:'Não achei nenhuma palavra de imóveis nem de conteúdo → fora do nosso trabalho.'};
+}
+
+// A "tomada": o resto do mundo só chama esta função. Trocar o cérebro = mexer só aqui dentro.
+async function consultarCerebro(pedido){
+  const enviado = {modelo: CEREBRO.modo === 'teste' ? 'cérebro de teste (grátis)' : CEREBRO.modelo, instrucoes: INSTRUCOES, pedido};
+  let resposta;
+  if (CEREBRO.modo === 'teste'){
+    await new Promise(r => setTimeout(r, rnd(1200, 2200)));   // finge o tempo que a IA leva para responder
+    resposta = cerebroTeste(pedido);
+  } else {
+    throw new Error('cérebro Claude ainda não ligado (Missão 2B, depois do crédito na API)');
+  }
+  return {enviado, resposta};
+}
+
+const PAPOS = ['Bom dia! ☀️','Esse café tá ótimo','Quem pegou meu grampeador?','Muito pedido hoje!','Já viu o mapa novo?','Bora trabalhar 💪','Hmm... 🤔'];
+
+/* ------------------------------ OS AGENTES ------------------------------ */
+const AGENTES = [
+  {id:'coord', nome:'Coordenador', sala:'esc', cor:'#e8b04a', etapas:['pedido','relatorio'], papel:'Recebe pedidos e lê os relatórios finais'},
+  {id:'pesq',  nome:'Pesquisador', sala:'bib', cor:'#5aa9e6', etapas:['pesquisa'],           papel:'Busca dados na Biblioteca'},
+  {id:'sent',  nome:'Sentinela',   sala:'imo', cor:'#4fd18b', etapas:['analise'],            papel:'Analisa o imóvel e dá o veredito'},
+  {id:'escr',  nome:'Escritor',    sala:'est', cor:'#e66a9a', etapas:['roteiro'],            papel:'Transforma a análise em texto'},
+  {id:'mens',  nome:'Mensageiro',  sala:'cor', cor:'#b48cf0', etapas:['envio'],              papel:'Leva o relatório de volta ao Escritório'},
+].map(d => {
+  const w = obj(d.sala, ETAPAS[d.etapas[0]].obj);
+  return {...d, tx:w.sx, ty:w.sy, x:w.sx*T, y:w.sy*T, caminho:[], fila:[{tipo:'esperar', dur:rnd(0.5,2), interrompivel:true}],
+          atual:null, energia:rnd(70,100), tarefa:null, tarefaPronta:false, balao:null, estado:'parado', rotulo:'',
+          pensamento:'Acabei de acordar.', frame:0, dir:1, progresso:0, piscar:rnd(1,4), xp:0};
+});
+const nivel = a => 1 + Math.floor(a.xp / 50);
+
+function falar(a, texto){ a.balao = {texto, t:3}; }
+function temTarefa(a){ return salaDe(a.sala).caixa.some(t => a.etapas.includes(t.etapa)) || (a.tarefa && a.tarefaPronta); }
+
+// =========== DECIDIR: o "cérebro" de regras fixas (é isto que a IA vai substituir) ===========
+function pensar(a){
+  const sala = salaDe(a.sala);
+
+  // Regra 1: se estou carregando uma tarefa pronta, levo para a caixa da próxima sala
+  if (a.tarefa && a.tarefaPronta){
+    const t = a.tarefa, dest = salaDe(ETAPAS[t.etapa].sala), cx = obj(dest.id, 'caixa');
+    a.pensamento = `Tarefa #${t.id} pronta → levar até a caixa da sala ${dest.nome}`;
+    a.fila.push({tipo:'ir', x:cx.sx, y:cx.sy},
+      {tipo:'fazer', fn:() => { dest.caixa.push(t); a.tarefa = null; a.tarefaPronta = false; falar(a, 'Entregue! ✉️');
+        log(`${a.nome} entregou a tarefa #${t.id} na caixa: ${dest.nome}`, a.cor); }});
+    return;
+  }
+
+  // Regra 2: energia baixa → ir ao Café recarregar
+  if (a.energia < 25){
+    const cf = obj('cafe', 'cafeteira'), s = assentoCafe();
+    a.pensamento = `Energia ${Math.round(a.energia)}% (menor que 25%) → ir ao Café recarregar`;
+    a.fila.push({tipo:'falar', texto:'Preciso de um café ☕'}, {tipo:'ir', x:cf.sx, y:cf.sy},
+      {tipo:'trabalhar', dur:3, rotulo:'Tomando café', fim:() => { a.energia = 100; log(`${a.nome} recarregou a energia no Café ☕`, a.cor); }},
+      {tipo:'ir', x:s[0], y:s[1]}, {tipo:'esperar', dur:rnd(2,4), estado:'parado'});
+    return;
+  }
+
+  // Regra 3: tem tarefa para mim na caixa da minha sala → pegar e trabalhar
+  const t = sala.caixa.find(x => a.etapas.includes(x.etapa));
+  if (t){
+    const E = ETAPAS[t.etapa], cx = obj(a.sala, 'caixa'), w = obj(a.sala, E.obj);
+    a.pensamento = `Minha caixa tem a tarefa #${t.id} (etapa "${t.etapa}") → pegar e começar: ${E.rotulo}`;
+    a.fila.push({tipo:'ir', x:cx.sx, y:cx.sy},
+      {tipo:'fazer', fn:() => { const i = sala.caixa.indexOf(t); if (i < 0) return false;
+        sala.caixa.splice(i, 1); a.tarefa = t; a.tarefaPronta = false; falar(a, E.ini); return true; }},
+      {tipo:'ir', x:w.sx, y:w.sy});
+    if (t.etapa === 'pedido') a.fila.push({tipo:'pensarIA', tarefa:t});   // Missão 2: consulta o cérebro
+    const trab = {tipo:'trabalhar', dur:E.dur, rotulo:E.rotulo, fim:() => concluirEtapa(a, t)};
+    // Missão 3: antes de trabalhar, consultar a memória (wiki)
+    if (t.etapa === 'pesquisa') a.fila.push({tipo:'fazer', fn:() => {
+      const p = lerWiki(a, t, 'ver se o tema já foi estudado');
+      if (p && p.estudos){ t.lembrou = p; trab.dur = 2; trab.rotulo = 'Relendo a wiki';
+        falar(a, `📖 Já estudei ${p.nome} ${p.estudos}x!`);
+        a.pensamento = `A wiki tem "${p.nome}" (${p.estudos} estudo(s)) → reaproveito e só busco o que mudou: 2 s em vez de 5`; }
+      else a.pensamento = `A wiki não tem nada sobre "${temaDe(t.titulo).nome}" → pesquisa completa (5 s)`;
+    }});
+    if (t.etapa === 'analise') a.fila.push({tipo:'fazer', fn:() => {
+      const p = lerWiki(a, t, 'ver vereditos anteriores');
+      if (p && p.estudos){ falar(a, `📖 Da última vez: ${p.fatos[0].split('→ ')[1]}`); a.pensamento = `Memória: ${p.fatos[0]}`; }
+    }});
+    a.fila.push(trab);
+    return;
+  }
+
+  // Regra 4: nada para fazer → passear, ir ao café ou esperar na mesa
+  const r = Math.random();
+  if (r < 0.5){
+    const p = tileAleatorio(a.sala);
+    a.pensamento = 'Caixa vazia → dar uma volta pela sala';
+    a.fila.push({tipo:'ir', x:p[0], y:p[1]}, {tipo:'esperar', dur:rnd(1.5,3.5), interrompivel:true});
+  } else if (r < 0.75){
+    const s = assentoCafe();
+    a.pensamento = 'Caixa vazia → passar no Café e bater papo';
+    a.fila.push({tipo:'ir', x:s[0], y:s[1]}, {tipo:'falar', texto:pick(PAPOS)}, {tipo:'esperar', dur:rnd(2,4), interrompivel:true});
+  } else {
+    const w = obj(a.sala, ETAPAS[a.etapas[0]].obj);
+    a.pensamento = 'Caixa vazia → esperar no meu posto de trabalho';
+    a.fila.push({tipo:'ir', x:w.sx, y:w.sy}, {tipo:'esperar', dur:rnd(2,4), interrompivel:true});
+  }
+}
+
+function concluirEtapa(a, t){
+  const E = ETAPAS[t.etapa], res = E.res(t);
+  t.historico.push(`${a.nome}: ${res}`);
+  falar(a, E.fim(t));
+  a.energia = Math.max(0, a.energia - rnd(6, 11));
+  const nAntes = nivel(a); a.xp += 10;
+  if (nivel(a) > nAntes){ log(`⭐ ${a.nome} subiu para o nível ${nivel(a)}!`, a.cor); }
+  log(`${a.nome} terminou "${t.etapa}" da #${t.id}: ${res}`, a.cor);
+  if (t.etapa === 'pesquisa' || t.etapa === 'analise') anotarRaw(a, t, `${t.etapa}: ${res}`);   // Missão 3: dado bruto
+  const prox = typeof E.prox === 'function' ? E.prox(t) : E.prox;
+  if (prox === 'recusar'){ a.tarefa = null; t.fim = true; mundo.recusados++;
+    log(`🚫 Pedido #${t.id} recusado: "${t.titulo}"`, '#ff8a8a'); }
+  else if (prox){ if (prox === 'roteiro' && t.veredito === '—') t.veredito = '📝 conteúdo'; t.etapa = prox; a.tarefaPronta = true; }
+  else { a.tarefa = null; t.fim = true; mundo.concluidas++;
+    log(`🏆 Missão #${t.id} concluída: "${t.titulo}" → ${t.veredito} (simulado)`, '#e8b04a');
+    ingerir(a, t); }   // Missão 3: o Coordenador escreve a wiki e arquiva o relatório
+}
+
+/* ------------------------------ O MUNDO ------------------------------ */
+const mundo = {tempo:0, velocidade:1, pausado:false, auto:true, ocioso:0, concluidas:0, recusados:0, tarefas:[], selecionado:null};
+
+/* ------------- MISSÃO 3: A MEMÓRIA (padrão "LLM Wiki" do Karpathy) -------------
+   raw/    = tudo o que chega (pedidos, dados da pesquisa, vereditos). Só se ADICIONA, ninguém edita.
+   wiki/   = uma página por tema. Só o Coordenador escreve, ao fechar cada missão (INGERIR).
+   output/ = os relatórios finais entregues.
+   acessos = registro de quem LEU / ESCREVEU / REVISOU qual nota, quando e para quê.
+   A cada 4 missões o Coordenador faz a REVISÃO de saúde da wiki (páginas contraditórias ou velhas).
+   Por enquanto fica guardada NESTE navegador (localStorage). Na missão da nuvem vai para o GitHub. */
+const CHAVE_MEM = 'mundoIA_memoria_v1';
+const TEMAS = [   // a ordem importa: o primeiro tema que bater vence (conteúdo primeiro: "reel sobre juros" é conteúdo)
+  {id:'conteudo',    nome:'Ideias de conteúdo', chaves:['reel','video','post','newsletter','ideia','roteiro']},
+  {id:'nunoa',      nome:'Ñuñoa',              chaves:['nunoa']},
+  {id:'providencia', nome:'Providencia',        chaves:['providencia','tobalaba']},
+  {id:'las-condes',  nome:'Las Condes',         chaves:['las condes']},
+  {id:'juros',       nome:'Juros no Chile',     chaves:['juros','taxa','tasa']},
+  {id:'santiago',    nome:'Santiago (geral)',   chaves:['santiago','mercado']},
+];
+function temaDe(titulo){ const txt = normalizar(titulo);
+  return TEMAS.find(m => m.chaves.some(c => txt.includes(c))) || {id:'outros', nome:'Outros'}; }
+const memVazia = () => ({raw:[], wiki:{}, output:[], acessos:[], ingestoes:0, proxId:1, dia:0});
+let MEM = memVazia(), memSuja = true;
+function carregarMemoria(){
+  try { const s = localStorage.getItem(CHAVE_MEM); if (s) MEM = Object.assign(memVazia(), JSON.parse(s)); } catch (e) {}
+  MEM.dia++; salvarMemoria();
+}
+function salvarMemoria(){ memSuja = true; try { localStorage.setItem(CHAVE_MEM, JSON.stringify(MEM)); } catch (e) {} }
+const quando = () => `D${MEM.dia} ${relogio()}`;
+function acesso(a, op, nota, motivo){
+  MEM.acessos.push({h:quando(), agente:a.nome, cor:a.cor, op, nota, motivo});
+  if (MEM.acessos.length > 300) MEM.acessos.shift();
+  salvarMemoria();
+}
+function anotarRaw(a, t, texto){
+  MEM.raw.push({h:quando(), tarefa:t.id, agente:a ? a.nome : 'Vaz/auto', texto});
+  if (MEM.raw.length > 500) MEM.raw.shift();
+  if (a) acesso(a, 'ESCREVEU', `raw/#${t.id}`, texto); else salvarMemoria();
+}
+function lerWiki(a, t, motivo){
+  const tm = temaDe(t.titulo), p = MEM.wiki[tm.id];
+  acesso(a, 'LEU', `wiki/${tm.id}`, motivo + (p ? '' : ' (página ainda não existe)'));
+  return p;
+}
+function ingerir(a, t){
+  const tm = temaDe(t.titulo);
+  const p = MEM.wiki[tm.id] || (MEM.wiki[tm.id] = {tema:tm.id, nome:tm.nome, estudos:0, vereditos:{}, fatos:[], atualizado:'', alerta:'', ult:0});
+  p.estudos++; p.vereditos[t.veredito] = (p.vereditos[t.veredito] || 0) + 1;
+  p.fatos.unshift(`#${t.id} "${t.titulo}" → ${t.veredito}`); p.fatos = p.fatos.slice(0, 5);
+  p.atualizado = quando(); MEM.ingestoes++; p.ult = MEM.ingestoes;
+  acesso(a, 'ESCREVEU', `wiki/${tm.id}`, `ingeriu a missão #${t.id} (${p.estudos}º estudo deste tema)`);
+  MEM.output.push({h:quando(), tarefa:t.id, titulo:t.titulo, veredito:t.veredito, historico:t.historico.slice()});
+  acesso(a, 'ESCREVEU', `output/#${t.id}`, 'relatório final arquivado');
+  log(`🗂️ Coordenador atualizou a wiki "${p.nome}" (${p.estudos} estudo(s))`, '#7fd6c2');
+  if (MEM.ingestoes % 4 === 0) revisar(a);
+}
+function revisar(a){
+  const paginas = Object.values(MEM.wiki); let alertas = 0;
+  for (const p of paginas){
+    const ks = Object.keys(p.vereditos);
+    const contra = ks.some(k => k.startsWith('DEAL')) && ks.some(k => k.startsWith('NO DEAL'));
+    const velha = MEM.ingestoes - p.ult >= 8;
+    p.alerta = contra ? '⚠️ contraditória (DEAL e NO DEAL): precisa de dado real' : velha ? '🕸️ velha: nenhum estudo novo nas últimas 8 missões' : '';
+    if (p.alerta) alertas++;
+  }
+  acesso(a, 'REVISOU', 'wiki/*', `revisão de saúde: ${paginas.length} página(s), ${alertas} com alerta`);
+  falar(a, 'Revisando a wiki 🧹');
+  log(`🧹 Coordenador revisou a wiki: ${paginas.length} página(s), ${alertas} com alerta`, '#7fd6c2');
+}
+function memoriaEmMarkdown(){
+  const L = ['# Memória do Mundo IA', `Exportada em ${new Date().toLocaleString('pt-BR')}`, '', '## raw/ (material bruto: só se adiciona)'];
+  MEM.raw.forEach(r => L.push(`- ${r.h} · #${r.tarefa} · ${r.agente}: ${r.texto}`));
+  L.push('', '## wiki/ (uma página por tema, escrita pelo Coordenador)');
+  Object.values(MEM.wiki).forEach(p => {
+    L.push('', `### ${p.nome}`, `- Estudos: ${p.estudos} · atualizada em ${p.atualizado}`,
+      `- Vereditos: ${Object.entries(p.vereditos).map(([k, n]) => `${k} ×${n}`).join(', ')}`);
+    if (p.alerta) L.push(`- Alerta: ${p.alerta}`);
+    p.fatos.forEach(f => L.push(`- ${f}`));
+  });
+  L.push('', '## output/ (relatórios entregues)');
+  MEM.output.forEach(o => L.push(`- ${o.h} · #${o.tarefa} "${o.titulo}" → ${o.veredito}`));
+  L.push('', '## Registro de acessos');
+  MEM.acessos.forEach(x => L.push(`- ${x.h} · ${x.agente} ${x.op} ${x.nota}: ${x.motivo}`));
+  return L.join('\n');
+}
+function renderMemoria(){
+  if (!memSuja) return; memSuja = false;
+  $('dia').textContent = MEM.dia;
+  $('mRaw').textContent = MEM.raw.length; $('mWiki').textContent = Object.keys(MEM.wiki).length; $('mOut').textContent = MEM.output.length;
+  const pg = $('mPaginas'); pg.innerHTML = '';
+  const paginas = Object.values(MEM.wiki).sort((p, q) => q.estudos - p.estudos);
+  if (!paginas.length) pg.textContent = 'Vazia. A primeira missão concluída cria a primeira página.';
+  for (const p of paginas){
+    const d = document.createElement('div');
+    const vs = Object.entries(p.vereditos).map(([k, n]) => `${k} ×${n}`).join(' · ');
+    d.textContent = `📄 ${p.nome}: ${p.estudos} estudo(s) · ${vs}${p.alerta ? ' · ' + p.alerta : ''}`;
+    if (p.alerta) d.style.color = '#ffb36b';
+    pg.appendChild(d);
+  }
+  const ac = $('mAcessos'); ac.innerHTML = '';
+  for (const x of MEM.acessos.slice(-25).reverse()){
+    const d = document.createElement('div'); d.innerHTML = '<span class="h"></span> <span></span>';
+    d.children[0].textContent = x.h; d.children[1].style.color = x.cor;
+    d.children[1].textContent = `${({LEU:'👁️', ESCREVEU:'✍️', REVISOU:'🧹'})[x.op]} ${x.agente} ${x.op} ${x.nota}: ${x.motivo}`;
+    ac.appendChild(d);
+  }
+}
+
+function criarPedido(titulo, doVaz){
+  const t = {id:MEM.proxId++, titulo, etapa:'pedido', historico:[], veredito:'—', fim:false};
+  mundo.tarefas.push(t); salaDe('esc').caixa.push(t);
+  anotarRaw(null, t, `pedido ${doVaz ? 'do Vaz' : 'automático'}: "${titulo}"`);
+  log(`📨 ${doVaz ? 'Pedido do Vaz' : 'Pedido automático'} #${t.id}: "${titulo}"`, '#ffffff');
+}
+const ativas = () => mundo.tarefas.filter(t => !t.fim).length;
+
+// AGIR: executa a ação atual da fila do agente
+function iniciar(a, ac){
+  if (ac.tipo === 'ir'){ a.caminho = caminho(a.tx, a.ty, ac.x, ac.y) || []; a.estado = 'andando'; }
+  else if (ac.tipo === 'trabalhar'){ ac.t = 0; a.estado = 'trabalhando'; a.rotulo = ac.rotulo; }
+  else if (ac.tipo === 'esperar'){ ac.t = 0; a.estado = ac.estado || 'parado'; }
+  else if (ac.tipo === 'pensarIA'){
+    const t = ac.tarefa; a.estado = 'pensando'; ac.pronto = false; falar(a, '💭 ...');
+    consultarCerebro(t.titulo).then(c => {
+      t.decisao = c.resposta; a.ultimaConsulta = c;
+      a.pensamento = `Cérebro decidiu: ${c.resposta.destino} → ${c.resposta.motivo}`;
+      log(`🧠 Coordenador decidiu sobre #${t.id}: ${c.resposta.destino}. ${c.resposta.motivo}`, '#c9a7ff');
+    }).catch(e => {
+      t.decisao = {destino:'recusar', motivo:'Erro no cérebro: ' + e.message};
+      log(`⚠️ Erro no cérebro: ${e.message}`, '#ff8a8a');
+    }).finally(() => { ac.pronto = true; });
+  }
+}
+function mover(a, dt){
+  if (!a.caminho.length) return true;
+  const n = a.caminho[0], tx = n.x * T, ty = n.y * T, dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy), passo = VEL * dt;
+  if (dx) a.dir = dx > 0 ? 1 : -1;
+  if (d <= passo){ a.x = tx; a.y = ty; a.tx = n.x; a.ty = n.y; a.caminho.shift(); }
+  else { a.x += dx / d * passo; a.y += dy / d * passo; }
+  a.frame += dt * 7; a.energia = Math.max(0, a.energia - 0.12 * dt);
+  return a.caminho.length === 0;
+}
+function atualizar(a, dt){
+  if (a.balao && (a.balao.t -= dt) <= 0) a.balao = null;
+  if ((a.piscar -= dt) < -0.15) a.piscar = rnd(2, 5);
+  for (let guarda = 0; guarda < 6; guarda++){
+    if (!a.atual){ if (!a.fila.length) pensar(a); a.atual = a.fila.shift() || null; if (!a.atual) return; iniciar(a, a.atual); }
+    const ac = a.atual; let fim = false;
+    switch (ac.tipo){
+      case 'ir': fim = mover(a, dt); break;
+      case 'trabalhar': ac.t += dt; a.progresso = Math.min(1, ac.t / ac.dur);
+        if (ac.t >= ac.dur){ a.progresso = 0; ac.fim && ac.fim(); fim = true; } break;
+      case 'esperar': ac.t += dt;
+        if (ac.interrompivel && temTarefa(a)){ a.fila = []; fim = true; } else if (ac.t >= ac.dur) fim = true; break;
+      case 'pensarIA': fim = ac.pronto; if (!fim && !a.balao) falar(a, '💭 ...'); break;
+      case 'fazer': if (ac.fn() === false) a.fila = []; fim = true; break;
+      case 'falar': falar(a, ac.texto); fim = true; break;
+    }
+    if (!fim) return;
+    a.atual = null;
+    if (ac.tipo === 'ir' || ac.tipo === 'trabalhar' || ac.tipo === 'esperar') return;
+  }
+}
+
+/* ------------------------------ DESENHO ------------------------------ */
+const fundo = document.createElement('canvas'); fundo.width = cv.width; fundo.height = cv.height;
+function desenharFundo(){
+  const g = fundo.getContext('2d'); g.setTransform(ESCALA, 0, 0, ESCALA, 0, 0);
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++){
+    const c = grade[y][x], X = x * T, Y = y * T, xadrez = (x + y) % 2;
+    if (c.t === 'wall'){ R(g, X, Y, T, T, '#232637'); R(g, X, Y, T, 3, '#30344a'); R(g, X, Y + T - 1, T, 1, '#181a26'); }
+    else if (c.t === 'corr'){ R(g, X, Y, T, T, xadrez ? '#3a3f4b' : '#363a46'); R(g, X, Y + 15, T, 1, '#30343f'); }
+    else { const s = salaDe(c.sala); R(g, X, Y, T, T, s.piso[xadrez]); R(g, X, Y + 7, T, 1, 'rgba(0,0,0,.06)');
+      if (c.t === 'door'){ R(g, X, Y, T, T, sombra(s.piso[0], 0.85)); R(g, X, Y + 6, T, 4, 'rgba(255,255,255,.06)'); } }
+  }
+  for (const s of SALAS) for (const o of s.objs) desenharObj(g, o);
+  g.font = `600 7px ${FONTE}`; g.textBaseline = 'middle';
+  for (const s of SALAS){ g.fillStyle = '#d6daea'; g.fillText(s.nome, (s.x + 1) * T, s.y * T + 8.5); }
+}
+function desenharObj(g, o){
+  const X = o.x * T, Y = o.y * T, W = o.w * T, H = o.h * T;
+  switch (o.k){
+    case 'desk': case 'studiodesk':
+      R(g, X, Y + 5, W, 8, '#9b6b3e'); R(g, X, Y + 5, W, 2, '#b98552'); R(g, X, Y + 13, W, 1, '#6e4a2a');
+      R(g, X + 1, Y + 14, 2, 2, '#4a301b'); R(g, X + W - 3, Y + 14, 2, 2, '#4a301b');
+      { const mx = X + W / 2 - 6; R(g, mx, Y - 4, 12, 9, '#2b2f3a'); R(g, mx + 1, Y - 3, 10, 6, '#5fd3ff'); R(g, mx + 2, Y - 2, 4, 1, '#c8f3ff'); R(g, mx + 5, Y + 5, 2, 1, '#2b2f3a'); }
+      if (o.k === 'studiodesk'){ R(g, X + 3, Y + 1, 1, 5, '#444'); R(g, X + 2, Y - 1, 3, 3, '#222'); }
+      break;
+    case 'board': R(g, X, Y + 1, W, 12, '#8a8fa0'); R(g, X + 1, Y + 2, W - 2, 10, '#e4e7ee');
+      R(g, X + 4, Y + 4, 18, 1, '#3b6fd1'); R(g, X + 4, Y + 7, 26, 1, '#d14b4b'); R(g, X + 36, Y + 4, 8, 6, '#4fd18b'); R(g, X + 50, Y + 5, 8, 5, '#e8b04a'); break;
+    case 'shelf': R(g, X, Y, W, H, '#5a3d24'); R(g, X, Y + 7, W, 1, '#3d2816');
+      { const cores = ['#d14b4b','#3b6fd1','#4fd18b','#e8b04a','#b48cf0','#e66a9a'];
+        for (let i = 0; i < W / 3 - 1; i++){ R(g, X + 2 + i * 3, Y + 2, 2, 5, cores[(i + o.x) % 6]); R(g, X + 2 + i * 3, Y + 9, 2, 5, cores[(i * 2 + o.x) % 6]); } } break;
+    case 'table': R(g, X, Y + 3, W, H - 5, '#8b5e34'); R(g, X, Y + 3, W, 2, '#a8774a'); R(g, X + 1, Y + H - 2, 2, 2, '#4a301b'); R(g, X + W - 3, Y + H - 2, 2, 2, '#4a301b');
+      R(g, X + 6, Y + 6, 7, 5, '#f3eee0'); R(g, X + 18, Y + 7, 6, 4, '#f3eee0'); break;
+    case 'screen': R(g, X, Y + 1, W, 11, '#111318'); R(g, X + 1, Y + 2, W - 2, 9, '#14352a');
+      for (let i = 0; i < 5; i++) R(g, X + 5 + i * 8, Y + 10 - (3 + (i * 7) % 6), 5, 3 + (i * 7) % 6, '#4fd18b'); break;
+    case 'chart': R(g, X, Y + 1, W, 11, '#111318'); R(g, X + 1, Y + 2, W - 2, 9, '#1a1d2b');
+      { let yy = 8; for (let i = 0; i < W - 4; i += 2){ yy = Math.max(3, Math.min(10, yy + ((i * 13) % 5) - 2)); R(g, X + 2 + i, Y + yy, 2, 1, i % 6 < 3 ? '#4fd18b' : '#ff6b6b'); } } break;
+    case 'maptable': R(g, X, Y + 2, W, H - 4, '#6e4a2a'); R(g, X + 2, Y + 4, W - 4, H - 8, '#cfe3c0');
+      R(g, X + 2, Y + 12, W - 4, 2, '#f4f1e6'); R(g, X + 20, Y + 4, 2, H - 8, '#f4f1e6'); R(g, X + 10, Y + 8, 3, 3, '#d14b4b'); R(g, X + 30, Y + 18, 3, 3, '#d14b4b'); R(g, X + 36, Y + 7, 3, 3, '#3b6fd1'); break;
+    case 'plant': R(g, X + 5, Y + 10, 6, 5, '#a0522d'); R(g, X + 5, Y + 10, 6, 1, '#c06a3d'); R(g, X + 3, Y + 4, 10, 7, '#3f9b4f'); R(g, X + 6, Y + 1, 4, 5, '#57b866'); R(g, X + 4, Y + 5, 2, 2, '#6fd07e'); break;
+    case 'inbox': R(g, X + 2, Y + 9, 12, 6, '#c8a25a'); R(g, X + 2, Y + 9, 12, 1, '#e3c27e'); R(g, X + 2, Y + 14, 12, 1, '#8a6a32'); break;
+    case 'rug': R(g, X + 2, Y + 2, W - 4, H - 4, '#9e3d3d'); R(g, X + 4, Y + 4, W - 8, H - 8, '#b5524a'); R(g, X + 6, Y + 6, W - 12, H - 12, '#9e3d3d'); break;
+    case 'camera': R(g, X + 7, Y + 7, 2, 6, '#555'); R(g, X + 4, Y + 13, 2, 3, '#555'); R(g, X + 10, Y + 13, 2, 3, '#555');
+      R(g, X + 3, Y + 1, 10, 7, '#222'); R(g, X + 6, Y - 2, 4, 3, '#222'); R(g, X + 11, Y + 3, 2, 2, '#ff4d4d'); break;
+    case 'light': R(g, X + 7, Y + 5, 2, 9, '#555'); R(g, X + 4, Y + 14, 8, 2, '#444'); R(g, X + 2, Y, 12, 7, '#f7f2d6'); R(g, X + 3, Y + 1, 10, 5, '#fffbe8'); break;
+    case 'sofa': R(g, X, Y + 2, W, 5, '#8f3330'); R(g, X, Y + 6, W, 8, '#b0413e'); R(g, X, Y + 13, W, 1, '#6e2522');
+      for (let i = 1; i < o.w; i++) R(g, X + i * T, Y + 7, 1, 6, '#8f3330'); break;
+    case 'coffee': R(g, X, Y + 5, W, 10, '#6b6f7a'); R(g, X, Y + 5, W, 2, '#868b98'); R(g, X + 4, Y - 4, 12, 11, '#30333d');
+      R(g, X + 6, Y - 2, 8, 3, '#1a1c22'); R(g, X + 13, Y + 2, 2, 2, '#ff4d4d'); R(g, X + 20, Y + 2, 5, 4, '#f3eee0'); R(g, X + 25, Y + 3, 1, 2, '#f3eee0'); break;
+    case 'ctable': R(g, X + 2, Y + 4, 12, 7, '#d8c7a0'); R(g, X + 2, Y + 10, 12, 1, '#a8956c'); R(g, X + 7, Y + 11, 2, 4, '#7a6a48'); R(g, X + 6, Y + 5, 3, 3, '#f3eee0'); break;
+    case 'mailbox': R(g, X + 3, Y + 1, 10, 13, '#3b6fd1'); R(g, X + 3, Y + 1, 10, 2, '#5d8ae6'); R(g, X + 5, Y + 5, 6, 2, '#1b2f5e'); R(g, X + 13, Y + 3, 2, 5, '#d14b4b'); R(g, X + 4, Y + 14, 8, 2, '#22314f'); break;
+    case 'box': R(g, X + 2, Y + 5, 12, 10, '#c49a5c'); R(g, X + 2, Y + 5, 12, 2, '#d8b273'); R(g, X + 7, Y + 5, 2, 10, '#e9cf98'); break;
+  }
+}
+
+function desenharAgente(a){
+  const x = Math.round(a.x), y = Math.round(a.y), anda = a.estado === 'andando';
+  const f = anda ? Math.floor(a.frame) % 2 : 0, b = anda && f ? -1 : 0, esc = sombra(a.cor);
+  if (mundo.selecionado === a){ ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x + 8, y + 15, 9 + Math.sin(mundo.tempo * 6), 4, 0, 0, 7); ctx.stroke(); }
+  R(ctx, x + 3, y + 14, 10, 2, 'rgba(0,0,0,.35)');                                  // sombra
+  R(ctx, x + 5, y + 11, 2, f ? 3 : 4, '#2a2d3a'); R(ctx, x + 9, y + 11, 2, f ? 4 : 3, '#2a2d3a'); // pernas
+  R(ctx, x + 4, y + 7 + b, 8, 5, a.cor); R(ctx, x + 4, y + 11 + b, 8, 1, esc);        // corpo
+  R(ctx, x + 2, y + 8 + b + (f ? 1 : 0), 2, 3, esc); R(ctx, x + 12, y + 8 + b + (f ? 0 : 1), 2, 3, esc); // braços
+  R(ctx, x + 3, y + 1 + b, 10, 7, '#cfd6e4'); R(ctx, x + 3, y + 7 + b, 10, 1, '#9aa3b8'); // cabeça
+  R(ctx, x + 4, y + 2 + b, 8, 4, '#1a1d29');                                          // tela do rosto
+  const ox = a.dir > 0 ? 1 : 0, olhoH = a.piscar < 0 ? 1 : (a.estado === 'trabalhando' ? 1 : 2);
+  R(ctx, x + 5 + ox, y + 3 + b + (2 - olhoH), 2, olhoH, a.cor); R(ctx, x + 8 + ox, y + 3 + b + (2 - olhoH), 2, olhoH, a.cor); // olhos
+  const pisca = Math.floor(mundo.tempo * 3) % 2;
+  const led = a.estado === 'pensando' ? (pisca ? '#c9a7ff' : '#5b3f8a') : a.energia < 25 ? '#ff5c5c' : a.estado === 'trabalhando' ? (pisca ? '#4fd18b' : '#2a6b4a') : anda ? '#ffd34d' : '#5aa9e6';
+  R(ctx, x + 7, y - 1 + b, 2, 2, '#9aa3b8'); R(ctx, x + 7, y - 3 + b, 2, 2, led);   // antena + luz
+  if (a.tarefa){ R(ctx, x + 11, y + 7 + b, 5, 6, a.tarefaPronta ? '#fff3b0' : '#fffbe8'); R(ctx, x + 12, y + 9 + b, 3, 1, '#888'); R(ctx, x + 12, y + 11 + b, 3, 1, '#888'); }
+  if (a.estado === 'trabalhando'){ R(ctx, x, y - 8, 16, 3, '#11121a'); R(ctx, x + 1, y - 7, Math.round(14 * a.progresso), 1, '#4fd18b'); }
+  ctx.font = `5px ${FONTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const nw = ctx.measureText(a.nome).width + 4;
+  R(ctx, x + 8 - nw / 2, y + 17, nw, 6, mundo.selecionado === a ? a.cor : 'rgba(17,18,26,.75)');
+  ctx.fillStyle = mundo.selecionado === a ? '#11121a' : '#e6e6ef'; ctx.fillText(a.nome, x + 8, y + 17.5);
+}
+
+function desenharBalao(a){
+  if (!a.balao) return;
+  ctx.font = `6px ${FONTE}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  const palavras = a.balao.texto.split(' '), linhas = []; let l = '';
+  for (const p of palavras){ const t = l ? l + ' ' + p : p; if (ctx.measureText(t).width > 90 && l){ linhas.push(l); l = p; } else l = t; }
+  linhas.push(l);
+  const w = Math.max(...linhas.map(s => ctx.measureText(s).width)) + 8, h = linhas.length * 8 + 4;
+  let bx = Math.round(a.x + 8 - w / 2); bx = Math.max(2, Math.min(COLS * T - w - 2, bx));
+  const by = Math.max(2, Math.round(a.y - 12 - h));
+  ctx.globalAlpha = Math.min(1, a.balao.t * 3);
+  R(ctx, bx, by, w, h, '#fffbe8'); R(ctx, bx, by + h, w, 1, '#a89f86');
+  R(ctx, Math.round(a.x + 7), by + h, 3, 2, '#fffbe8'); R(ctx, Math.round(a.x + 8), by + h + 2, 1, 1, '#fffbe8');
+  ctx.fillStyle = '#1b1d27'; linhas.forEach((s, i) => ctx.fillText(s, bx + 4, by + 3 + i * 8));
+  ctx.globalAlpha = 1;
+}
+
+function desenhar(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false; ctx.drawImage(fundo, 0, 0);
+  ctx.setTransform(ESCALA, 0, 0, ESCALA, 0, 0);
+  for (const s of SALAS){ const cx = s.objs.find(o => o.n === 'caixa'); if (!cx) continue;
+    const n = s.caixa.length, X = cx.x * T, Y = cx.y * T;
+    for (let i = 0; i < Math.min(n, 4); i++){ R(ctx, X + 4, Y + 7 - i * 2, 8, 3, '#fffbe8'); R(ctx, X + 4, Y + 9 - i * 2, 8, 1, '#c9c2a8'); }
+    if (n > 0){ ctx.font = `600 6px ${FONTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; R(ctx, X + 11, Y - 1, 7, 7, '#d14b4b'); ctx.fillStyle = '#fff'; ctx.fillText(String(n), X + 14.5, Y - 0.5); }
+  }
+  const ordem = [...AGENTES].sort((p, q) => p.y - q.y);
+  ordem.forEach(desenharAgente);
+  ordem.forEach(desenharBalao);
+  if (mundo.pausado){ ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, COLS * T, ROWS * T);
+    ctx.font = `600 16px ${FONTE}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff'; ctx.fillText('⏸ PAUSADO', COLS * T / 2, ROWS * T / 2); }
+}
+
+/* ------------------------------ PAINEL ------------------------------ */
+const $ = id => document.getElementById(id);
+function log(txt, cor){
+  const d = document.createElement('div'), h = relogio();
+  d.innerHTML = `<span class="h">${h}</span> <span style="color:${cor || '#e6e6ef'}"></span>`;
+  d.lastChild.textContent = txt;
+  $('log').prepend(d); while ($('log').children.length > 80) $('log').lastChild.remove();
+}
+function relogio(){ const m = 8 * 60 + Math.floor(mundo.tempo); return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
+
+AGENTES.forEach(a => {
+  const el = document.createElement('div'); el.className = 'ag';
+  el.innerHTML = `<span class="dot" style="background:${a.cor}"></span><b>${a.nome}</b><span class="nv"></span><span class="est"></span><span class="bar"><i></i></span>`;
+  el.onclick = () => { mundo.selecionado = a; };
+  a.el = el; $('lista').appendChild(el);
+});
+const NOMES_ESTADO = {andando:'🚶 andando', trabalhando:'⚙️', parado:'💤 parado', pensando:'💭 consultando o cérebro'};
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+let consultaMostrada = null;
+// Mostra o que foi "enviado à IA" e o que ela respondeu (só muda quando há consulta nova)
+function atualizarConsulta(a){
+  const c = a && a.ultimaConsulta;
+  if (c === consultaMostrada) return; consultaMostrada = c;
+  const box = $('consulta'); box.innerHTML = '';
+  if (!c) return;
+  box.innerHTML = `<details open><summary>📤 O que foi enviado ao cérebro</summary>
+      <div class="k" style="margin:4px 0">Modelo: <span class="m"></span></div><pre class="pre i"></pre>
+      <div class="k">Pedido:</div><pre class="pre p"></pre></details>
+    <details open><summary>📥 O que o cérebro respondeu</summary><pre class="pre r"></pre></details>`;
+  box.querySelector('.m').textContent = c.enviado.modelo;
+  box.querySelector('.i').textContent = c.enviado.instrucoes;
+  box.querySelector('.p').textContent = c.enviado.pedido;
+  box.querySelector('.r').textContent = JSON.stringify(c.resposta, null, 2);
+}
+function atualizarPainel(){
+  $('relogio').textContent = relogio(); $('concluidas').textContent = mundo.concluidas; $('recusados').textContent = mundo.recusados; $('ativas').textContent = ativas();
+  for (const a of AGENTES){
+    a.el.classList.toggle('sel', mundo.selecionado === a);
+    a.el.querySelector('.nv').textContent = `nível ${nivel(a)}`;
+    a.el.querySelector('.est').textContent = a.estado === 'trabalhando' ? `⚙️ ${a.rotulo}` : NOMES_ESTADO[a.estado];
+    const bar = a.el.querySelector('.bar i'); bar.style.width = a.energia + '%'; bar.style.background = a.energia < 25 ? '#ff5c5c' : '#4fd18b';
+  }
+  const a = mundo.selecionado;
+  if (a){
+    $('cerebroTitulo').textContent = `🧠 Cérebro do ${a.nome}`;
+    const t = a.tarefa;
+    const temCerebro = a.id === 'coord';
+    $('cerebro').innerHTML = `<div><span class="k">Papel:</span> ${a.papel}</div>
+      <div><span class="k">Energia:</span> ${Math.round(a.energia)}% · <span class="k">XP:</span> ${a.xp} (nível ${nivel(a)})</div>
+      <div><span class="k">Carregando:</span> ${t ? `#${t.id} "${esc(t.titulo)}"` : 'nada'}</div>
+      <div style="margin-top:6px"><span class="k">Último pensamento:</span></div>
+      <div id="pens"></div>
+      <div class="sub" style="margin-top:6px">${temCerebro
+        ? `Rota dos pedidos: decidida pelo cérebro (agora: <b>${CEREBRO.modo === 'teste' ? 'teste grátis' : CEREBRO.modelo}</b>). O resto: regras fixas.`
+        : 'Este robô ainda usa só regras fixas (if/else).'}</div>`;
+    $('pens').textContent = '💭 ' + a.pensamento;
+  }
+  atualizarConsulta(a);
+  renderMemoria();
+}
+
+/* ------------------------------ CONTROLES ------------------------------ */
+$('pausa').onclick = () => { mundo.pausado = !mundo.pausado; $('pausa').textContent = mundo.pausado ? '▶ Continuar' : '⏸ Pausar'; };
+document.querySelectorAll('.vel').forEach(b => b.onclick = () => {
+  mundo.velocidade = +b.dataset.v; document.querySelectorAll('.vel').forEach(x => x.classList.toggle('on', x === b)); });
+$('auto').onchange = e => { mundo.auto = e.target.checked; };
+function enviar(){ const v = $('pedido').value.trim(); if (!v) return; criarPedido(v, true); $('pedido').value = ''; }
+$('mBaixar').onclick = () => {
+  const u = URL.createObjectURL(new Blob([memoriaEmMarkdown()], {type:'text/markdown'}));
+  const l = document.createElement('a'); l.href = u; l.download = 'memoria_mundo_ia.md'; l.click(); setTimeout(() => URL.revokeObjectURL(u), 1000);
+};
+$('mApagar').onclick = () => {
+  if (!confirm('Apagar toda a memória dos robôs? Não dá para desfazer.')) return;
+  MEM = memVazia(); MEM.dia = 1; MEM.proxId = Math.max(1, ...mundo.tarefas.map(t => t.id + 1)); salvarMemoria();
+  log('🧹 Memória apagada pelo Vaz. Os robôs começam do zero.', '#ff8a8a');
+};
+$('enviar').onclick = enviar; $('pedido').onkeydown = e => { if (e.key === 'Enter') enviar(); };
+cv.onclick = e => {
+  const r = cv.getBoundingClientRect(), wx = (e.clientX - r.left) / r.width * COLS * T, wy = (e.clientY - r.top) / r.height * ROWS * T;
+  let melhor = null, dm = 14;
+  for (const a of AGENTES){ const d = Math.hypot(a.x + 8 - wx, a.y + 8 - wy); if (d < dm){ dm = d; melhor = a; } }
+  if (melhor) mundo.selecionado = melhor;
+};
+
+/* ------------------------------ LAÇO PRINCIPAL ------------------------------ */
+let ultimo = performance.now(), acPainel = 0;
+function laco(agora){
+  const dtReal = Math.min(0.05, (agora - ultimo) / 1000); ultimo = agora;
+  if (!mundo.pausado){
+    const dt = dtReal * mundo.velocidade;
+    mundo.tempo += dt;
+    AGENTES.forEach(a => atualizar(a, dt));
+    // Pedidos automáticos: mantém até 3 tarefas rodando, um novo pedido a cada 8 s no máximo
+    if (mundo.auto && ativas() < 3){ mundo.ocioso += dt; if (mundo.ocioso > (ativas() === 0 ? 2 : 8)){ mundo.ocioso = 0; criarPedido(pick(PEDIDOS_AUTO), false); } }
+    else mundo.ocioso = 0;
+  }
+  desenhar();
+  if ((acPainel += dtReal) > 0.2){ acPainel = 0; atualizarPainel(); }
+  requestAnimationFrame(laco);
+}
+
+function iniciarMundo(){
+  desenharFundo(); mundo.selecionado = AGENTES[0]; carregarMemoria();
+  log('🌍 O Mundo IA acordou. 5 robôs prontos para trabalhar.', '#e8b04a');
+  const np = Object.keys(MEM.wiki).length;
+  if (np) log(`📚 Dia ${MEM.dia}: o mundo lembra! ${np} página(s) na wiki, ${MEM.raw.length} notas no raw.`, '#7fd6c2');
+  requestAnimationFrame(laco);
+}
+(document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(iniciarMundo);
+</script>
+</body>
+</html>
